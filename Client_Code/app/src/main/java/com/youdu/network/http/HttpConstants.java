@@ -7,15 +7,16 @@ package com.youdu.network.http;
  */
 public class HttpConstants {
 
+    //baseUrl
     private static final String ROOT_URL = "http://imooc.com/api";
 
     /**
-     * 请求本地产品列表
+     * 请求本地产品列表(对应search.json)
      */
     public static String PRODUCT_LIST = ROOT_URL + "/fund/search.php";
 
     /**
-     * 本地产品列表更新时间措请求
+     * 本地产品列表更新时间措请求(对应update.json)
      */
     public static String PRODUCT_LATESAT_UPDATE = ROOT_URL + "/fund/upsearch.php";
 
@@ -30,7 +31,7 @@ public class HttpConstants {
     public static String CHECK_UPDATE = ROOT_URL + "/config/check_update.php";
 
     /**
-     * 首页产品请求接口
+     * 首页产品请求接口（对应home_data.json）
      */
     public static String HOME_RECOMMAND = ROOT_URL + "/product/home_recommand.php";
 
