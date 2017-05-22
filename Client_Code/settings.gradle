@@ -1,1 +1,1 @@
-include ':app', ':vuandroidadsdk'
+include ':app', ':vuandroidadsdk', ':video'
