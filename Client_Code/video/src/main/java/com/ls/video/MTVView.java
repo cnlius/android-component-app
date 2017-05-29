@@ -124,25 +124,56 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
         super(context);
     }
 
+    /**
+     * MediaPlayer.OnBufferingUpdateListener
+     * 视频分段缓存，这里监听每次缓存的更新回调
+     * @param mp
+     * @param percent
+     */
     @Override
     public void onBufferingUpdate(MediaPlayer mp, int percent) {
 
     }
 
+    /**
+     * MediaPlayer.OnCompletionListener
+     * 监听播放完成回调
+     * @param mp
+     */
     @Override
     public void onCompletion(MediaPlayer mp) {
 
     }
 
+    /**
+     * MediaPlayer.OnErrorListener
+     * 出错回调
+     * @param mp
+     * @param what
+     * @param extra
+     * @return
+     */
     @Override
     public boolean onError(MediaPlayer mp, int what, int extra) {
         return false;
     }
 
+
+    /**
+     * MediaPlayer.OnPreparedListener
+     * 由初始化进入准备完成状态
+     * @param mp
+     */
     @Override
     public void onPrepared(MediaPlayer mp) {
 
     }
+
+    //SurfaceTextureListener--begin---------------
+    /**
+     * TextureView.SurfaceTextureListener
+     * 播放帧数据画面监听
+     */
 
     @Override
     public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
@@ -163,6 +194,8 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
     public void onSurfaceTextureUpdated(SurfaceTexture surface) {
 
     }
+
+    //SurfaceTextureListener--end---------------
 
     @Override
     public void onClick(View v) {
