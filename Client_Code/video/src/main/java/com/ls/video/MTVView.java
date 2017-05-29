@@ -5,14 +5,11 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.SurfaceTexture;
-import android.graphics.drawable.AnimationDrawable;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
-import android.support.annotation.IntDef;
-import android.support.annotation.NonNull;
 import android.util.DisplayMetrics;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -33,7 +30,7 @@ import android.widget.RelativeLayout;
 public class MTVView extends RelativeLayout implements View.OnClickListener,
         MediaPlayer.OnPreparedListener, MediaPlayer.OnErrorListener,
         MediaPlayer.OnCompletionListener, MediaPlayer.OnBufferingUpdateListener,
-        TextureView.SurfaceTextureListener,MediaPlayer.OnInfoListener {
+        TextureView.SurfaceTextureListener, MediaPlayer.OnInfoListener {
 
     /**
      * Constant(常量)
@@ -109,10 +106,10 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
      * @param context
      * @param parentContainer video的父容器
      */
-    public MTVView(Context context,ViewGroup parentContainer) {
+    public MTVView(Context context, ViewGroup parentContainer) {
         super(context);
-        mParentContainer=parentContainer;
-        audioManager= (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
+        mParentContainer = parentContainer;
+        audioManager = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
         initData();
         initView();
         registerBroadcastReceiver();
@@ -154,6 +151,7 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
 
     /**
      * view显隐状态改变监测
+     *
      * @param changedView
      * @param visibility
      */
@@ -177,6 +175,7 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
     /**
      * MediaPlayer.OnBufferingUpdateListener
      * 视频分段缓存，这里监听每次缓存的更新回调
+     *
      * @param mp
      * @param percent
      */
@@ -188,6 +187,7 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
     /**
      * MediaPlayer.OnCompletionListener
      * 监听播放完成回调
+     *
      * @param mp
      */
     @Override
@@ -198,6 +198,7 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
     /**
      * MediaPlayer.OnErrorListener
      * 出错回调
+     *
      * @param mp
      * @param what
      * @param extra
@@ -212,6 +213,7 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
     /**
      * MediaPlayer.OnPreparedListener
      * 由初始化进入准备完成状态
+     *
      * @param mp
      */
     @Override
@@ -228,6 +230,7 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
 
     /**
      * 标明TextureView进入就绪状态
+     *
      * @param surface
      * @param width
      * @param height
@@ -389,6 +392,7 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
 
     /**
      * 获得当前播放位置
+     *
      * @return
      */
     public int getCurrentPosition() {
@@ -400,6 +404,7 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
 
     /**
      * 播放器是否正在播放
+     *
      * @return
      */
     public boolean isPlaying() {
