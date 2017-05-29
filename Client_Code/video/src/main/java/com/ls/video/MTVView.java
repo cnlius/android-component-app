@@ -3,16 +3,24 @@ package com.ls.video;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.SurfaceTexture;
+import android.graphics.drawable.AnimationDrawable;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.support.annotation.IntDef;
+import android.support.annotation.NonNull;
+import android.util.DisplayMetrics;
+import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.RelativeLayout;
@@ -25,7 +33,7 @@ import android.widget.RelativeLayout;
 public class MTVView extends RelativeLayout implements View.OnClickListener,
         MediaPlayer.OnPreparedListener, MediaPlayer.OnErrorListener,
         MediaPlayer.OnCompletionListener, MediaPlayer.OnBufferingUpdateListener,
-        TextureView.SurfaceTextureListener {
+        TextureView.SurfaceTextureListener,MediaPlayer.OnInfoListener {
 
     /**
      * Constant(常量)
@@ -86,10 +94,9 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
         public void handleMessage(Message msg) {
             switch (msg.what) {
                 case TIME_MSG:
-                    //播中监测，每隔一段事件发送一个TIME_MSG事件，执行一次进度更新；
+                    //播中监测，每隔一段事件发送一个TIME_MSG事件，通知播放器播放到了那里，执行一次进度更新；
                     if (isPlaying()) {
                         //还可以在这里更新progressbar
-                        //LogUtils.i(TAG, "TIME_MSG");
                         listener.onBufferUpdate(getCurrentPosition());
                         sendEmptyMessageDelayed(TIME_MSG, TIME_INVAL);
                     }
@@ -99,30 +106,73 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
     };
 
     /**
-     * 获得当前播放位置
-     * @return
+     * @param context
+     * @param parentContainer video的父容器
      */
-    public int getCurrentPosition() {
-        if (this.mediaPlayer != null) {
-            return mediaPlayer.getCurrentPosition();
-        }
-        return 0;
+    public MTVView(Context context,ViewGroup parentContainer) {
+        super(context);
+        mParentContainer=parentContainer;
+        audioManager= (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
+        initData();
+        initView();
+        registerBroadcastReceiver();
+    }
+
+    private void initData() {
+        DisplayMetrics dm = new DisplayMetrics();
+        WindowManager wm = (WindowManager) getContext().getSystemService(Context.WINDOW_SERVICE);
+        wm.getDefaultDisplay().getMetrics(dm);
+        //宽度=屏幕的宽度
+        mScreenWidth = dm.widthPixels;
+        //高度是宽度的9/16
+        mDestationHeight = (int) (mScreenWidth * VideoConstant.VIDEO_HEIGHT_PERCENT);
+    }
+
+    private void initView() {
+        LayoutInflater inflater = LayoutInflater.from(this.getContext());
+        mPlayerView = (RelativeLayout) inflater.inflate(R.layout.video_player, this);
+        mVideoView = (TextureView) mPlayerView.findViewById(R.id.xadsdk_player_video_textureView);
+        mVideoView.setOnClickListener(this);
+        mVideoView.setKeepScreenOn(true); //设置屏幕常亮
+        mVideoView.setSurfaceTextureListener(this);
+        initSmallLayoutMode(); //init the small mode
+    }
+
+    // 小模式状态
+    private void initSmallLayoutMode() {
+        LayoutParams params = new LayoutParams(mScreenWidth, mDestationHeight);
+        params.addRule(RelativeLayout.CENTER_IN_PARENT);
+        mPlayerView.setLayoutParams(params);
+
+        mMiniPlayBtn = (Button) mPlayerView.findViewById(R.id.xadsdk_small_play_btn);
+        mFullBtn = (ImageView) mPlayerView.findViewById(R.id.xadsdk_to_full_view);
+        mLoadingBar = (ImageView) mPlayerView.findViewById(R.id.loading_bar);
+        mFrameView = (ImageView) mPlayerView.findViewById(R.id.framing_view);
+        mMiniPlayBtn.setOnClickListener(this);
+        mFullBtn.setOnClickListener(this);
     }
 
     /**
-     * 播放器是否正在播放
-     * @return
+     * view显隐状态改变监测
+     * @param changedView
+     * @param visibility
      */
-    public boolean isPlaying() {
-        if (mediaPlayer != null && mediaPlayer.isPlaying()) {
-            return true;
-        }
-        return false;
+    @Override
+    protected void onVisibilityChanged(View changedView, int visibility) {
+        super.onVisibilityChanged(changedView, visibility);
     }
 
-    public MTVView(Context context) {
-        super(context);
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        return true; //点击播放器时消耗事件，防止于外界产生事件冲突
     }
+
+    @Override
+    public void onClick(View v) {
+
+    }
+
+    //MediaPlayer生命周期相关回调方法--begin----------------------------
 
     /**
      * MediaPlayer.OnBufferingUpdateListener
@@ -175,6 +225,13 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
      * 播放帧数据画面监听
      */
 
+
+    /**
+     * 标明TextureView进入就绪状态
+     * @param surface
+     * @param width
+     * @param height
+     */
     @Override
     public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
 
@@ -197,10 +254,162 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
 
     //SurfaceTextureListener--end---------------
 
+    //MediaPlayer.OnInfoListener
     @Override
-    public void onClick(View v) {
+    public boolean onInfo(MediaPlayer mp, int what, int extra) {
+        return false;
+    }
+
+    //MediaPlayer生命周期相关回调方法--end----------------------------
+
+
+    //播放器的功能方法--begin----------------------------
+
+    //加载视频的url
+    public void load() {
 
     }
+
+    //播放暂停
+    public void pause() {
+
+    }
+
+    /**
+     * 恢复继续播放
+     * > 就绪状态->播放状态；
+     * > pause->播放状态；
+     */
+    public void resume() {
+
+    }
+
+    //播放完成后回到初始状态
+    public void playBack() {
+
+    }
+
+    //播放停止
+    public void stop() {
+
+    }
+
+    //销毁我们当前自定义的videoView
+    public void destroy() {
+
+    }
+
+    //跳到指定点播放视频
+    public void seekAndResume(int position) {
+
+    }
+
+    //跳到指定点暂停视频
+    public void seekAndPause(int position) {
+
+    }
+
+    //通知外界播放器产生的一些事件
+    public void setListener(MTVPlayerListener listener) {
+        this.listener = listener;
+    }
+
+    //播放器的功能方法--end----------------------------
+
+    //播放器的辅助方法--begin----------------------------
+
+    private synchronized void checkMediaPlayer() {
+        if (mediaPlayer == null) {
+            mediaPlayer = createMediaPlayer(); //每次都重新创建一个新的播放器
+        }
+    }
+
+    //创建MediaPlayer
+    private MediaPlayer createMediaPlayer() {
+        mediaPlayer = new MediaPlayer();
+        mediaPlayer.reset();
+        mediaPlayer.setOnPreparedListener(this);
+        mediaPlayer.setOnCompletionListener(this);
+        mediaPlayer.setOnInfoListener(this);
+        mediaPlayer.setOnErrorListener(this);
+        mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
+        if (videoSurface != null && videoSurface.isValid()) {
+            mediaPlayer.setSurface(videoSurface);
+        } else {
+            stop();
+        }
+        return mediaPlayer;
+    }
+
+    //屏幕事件广播
+    private void registerBroadcastReceiver() {
+        if (mScreenReceiver == null) {
+            mScreenReceiver = new ScreenEventReceiver();
+            IntentFilter filter = new IntentFilter();
+            filter.addAction(Intent.ACTION_SCREEN_OFF);
+            filter.addAction(Intent.ACTION_USER_PRESENT);
+            getContext().registerReceiver(mScreenReceiver, filter);
+        }
+    }
+
+    private void unRegisterBroadcastReceiver() {
+        if (mScreenReceiver != null) {
+            getContext().unregisterReceiver(mScreenReceiver);
+        }
+    }
+
+    private void decideCanPlay() {
+    }
+
+    public void isShowFullBtn(boolean isShow) {
+        mFullBtn.setImageResource(isShow ? R.mipmap.video_ad_mini : R.mipmap.video_ad_mini_null);
+        mFullBtn.setVisibility(isShow ? View.VISIBLE : View.GONE);
+    }
+
+    public boolean isRealPause() {
+        return mIsRealPause;
+    }
+
+    public boolean isComplete() {
+        return mIsComplete;
+    }
+
+    private void showPauseView(boolean show) {
+    }
+
+    private void showLoadingView() {
+    }
+
+    private void showPlayView() {
+        mLoadingBar.clearAnimation();
+        mLoadingBar.setVisibility(View.GONE);
+        mMiniPlayBtn.setVisibility(View.GONE);
+        mFrameView.setVisibility(View.GONE);
+    }
+
+    /**
+     * 获得当前播放位置
+     * @return
+     */
+    public int getCurrentPosition() {
+        if (this.mediaPlayer != null) {
+            return mediaPlayer.getCurrentPosition();
+        }
+        return 0;
+    }
+
+    /**
+     * 播放器是否正在播放
+     * @return
+     */
+    public boolean isPlaying() {
+        if (mediaPlayer != null && mediaPlayer.isPlaying()) {
+            return true;
+        }
+        return false;
+    }
+
+    //播放器的辅助方法--end----------------------------
 
     /**
      * 监听锁屏事件的广播接收器
@@ -231,9 +440,6 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
 
     /**
      * 事件监听回调，主要提供给外界处理
-     *
-     * 供slot层来实现具体点击逻辑,具体逻辑还会变，
-     * 如果对UI的点击没有具体监测的话可以不回调
      */
     public interface MTVPlayerListener {
 
