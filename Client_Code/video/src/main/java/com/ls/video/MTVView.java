@@ -4,7 +4,9 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.graphics.Bitmap;
 import android.graphics.SurfaceTexture;
+import android.graphics.drawable.AnimationDrawable;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.os.Handler;
@@ -152,12 +154,23 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
     /**
      * view显隐状态改变监测
      *
+     * 当前播放页面，跳转到其他页面时会触发
+     *
      * @param changedView
      * @param visibility
      */
     @Override
     protected void onVisibilityChanged(View changedView, int visibility) {
         super.onVisibilityChanged(changedView, visibility);
+        if (visibility == VISIBLE && playerState == STATE_PAUSING) {
+            if (isRealPause() || isComplete()) {
+                pause();
+            } else {
+                decideCanPlay();
+            }
+        } else {
+            pause();
+        }
     }
 
     @Override
@@ -192,7 +205,12 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
      */
     @Override
     public void onCompletion(MediaPlayer mp) {
-
+        if (listener != null) {
+            listener.onMTVLoadComplete();
+        }
+        setIsComplete(true);
+        setIsRealPause(true);
+        playBack(); //回到初始状态
     }
 
     /**
@@ -206,7 +224,19 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
      */
     @Override
     public boolean onError(MediaPlayer mp, int what, int extra) {
-        return false;
+        this.playerState = STATE_ERROR;
+        mediaPlayer = mp;
+        if (mediaPlayer != null) {
+            mediaPlayer.reset();
+        }
+        if (mCurrentCount >= LOAD_TOTAL_COUNT) {
+            showPauseView(false);
+            if (this.listener != null) {
+                listener.onMTVLoadFailed();
+            }
+        }
+        this.stop();//去重新load
+        return true; //返回true表示用户自己处理，false系统会默认做处理；
     }
 
 
@@ -214,11 +244,32 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
      * MediaPlayer.OnPreparedListener
      * 由初始化进入准备完成状态
      *
+     * 在load()方法中调用prepareAsync()异步准备，回调此方法；
      * @param mp
      */
     @Override
     public void onPrepared(MediaPlayer mp) {
-
+        showPlayView();
+        mediaPlayer = mp;
+        if (mediaPlayer != null) {
+            mediaPlayer.setOnBufferingUpdateListener(this);
+            mCurrentCount = 0;
+            if (listener != null) {
+                //视频加载成功
+                listener.onMTVLoadSuccess();
+            }
+            //满足自动播放条件，则直接播放
+//            if (Utils.canAutoPlay(getContext(),
+//                    AdParameters.getCurrentSetting()) &&
+//                    Utils.getVisiblePercent(mParentContainer) > SDKConstant.VIDEO_SCREEN_PERCENT) {
+//                setCurrentPlayState(STATE_PAUSING);
+//                resume();
+//            } else {
+//                setCurrentPlayState(STATE_PLAYING);
+//                pause();
+//            }
+            decideCanPlay(); //决定是否播放
+        }
     }
 
     //SurfaceTextureListener--begin---------------
@@ -237,7 +288,10 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
      */
     @Override
     public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
-
+        videoSurface = new Surface(surface);
+        checkMediaPlayer();
+        mediaPlayer.setSurface(videoSurface);
+        load();
     }
 
     @Override
@@ -268,14 +322,59 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
 
     //播放器的功能方法--begin----------------------------
 
-    //加载视频的url
+    /**
+     * 加载视频的url
+     *
+     * load()方法需要在TextureView准备好以后才可以调用；
+     */
     public void load() {
+        if (this.playerState != STATE_IDLE) {
+            return;
+        }
+        showLoadingView();
+        try {
+            setCurrentPlayState(STATE_IDLE);
+            //完成MediaPlayer的创建
+            checkMediaPlayer();
+//            mute(true);
+            mediaPlayer.setDataSource(this.mUrl);
+            mediaPlayer.prepareAsync(); //开始异步加载
+        } catch (Exception e) {
+            stop(); //error以后重新调用stop加载
+        }
+    }
 
+    /**
+     * true is no voice
+     *
+     * @param mute
+     */
+    public void mute(boolean mute) {
+        isMute = mute;
+        if (mediaPlayer != null && this.audioManager != null) {
+            float volume = isMute ? 0.0f : 1.0f;
+            mediaPlayer.setVolume(volume, volume);
+        }
+    }
+
+    private void setCurrentPlayState(int state) {
+        playerState = state;
     }
 
     //播放暂停
     public void pause() {
-
+        if (this.playerState != STATE_PLAYING) {
+            return;
+        }
+        setCurrentPlayState(STATE_PAUSING);
+        if (isPlaying()) {
+            mediaPlayer.pause();
+            if (!this.canPlay) {
+                this.mediaPlayer.seekTo(0);
+            }
+        }
+        this.showPauseView(false);
+        mHandler.removeCallbacksAndMessages(null);
     }
 
     /**
@@ -284,17 +383,71 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
      * > pause->播放状态；
      */
     public void resume() {
+        if (this.playerState != STATE_PAUSING) {
+            return;
+        }
+        if (!isPlaying()) {
+            entryResumeState(); //设置为播放中的状态值
+            mediaPlayer.setOnSeekCompleteListener(null);
+            mediaPlayer.start();
+            //只有在resume状态下，才会更新播放进度
+            mHandler.sendEmptyMessage(TIME_MSG);
+            showPauseView(true);
+        } else {
+            showPauseView(false);
+        }
+    }
 
+    /**
+     * 进入播放状态时的状态更新
+     */
+    private void entryResumeState() {
+        canPlay = true;
+        setCurrentPlayState(STATE_PLAYING);
+        setIsRealPause(false);
+        setIsComplete(false);
+    }
+
+    public void setIsComplete(boolean isComplete) {
+        mIsComplete = isComplete;
+    }
+
+    public void setIsRealPause(boolean isRealPause) {
+        this.mIsRealPause = isRealPause;
     }
 
     //播放完成后回到初始状态
     public void playBack() {
-
+        setCurrentPlayState(STATE_PAUSING);
+        mHandler.removeCallbacksAndMessages(null);
+        if (mediaPlayer != null) {
+            mediaPlayer.setOnSeekCompleteListener(null);
+            mediaPlayer.seekTo(0);
+            mediaPlayer.pause();
+        }
+        this.showPauseView(false);
     }
 
     //播放停止
     public void stop() {
+        //清空播放器
+        if (this.mediaPlayer != null) {
+            this.mediaPlayer.reset();
+            this.mediaPlayer.setOnSeekCompleteListener(null);
+            this.mediaPlayer.stop();
+            this.mediaPlayer.release();
+            this.mediaPlayer = null;
+        }
+        mHandler.removeCallbacksAndMessages(null);
+        setCurrentPlayState(STATE_IDLE);
 
+        //重试加载
+        if (mCurrentCount < LOAD_TOTAL_COUNT) { //满足重新加载的条件
+            mCurrentCount += 1;
+            load();
+        } else { //停止重试
+            showPauseView(false); //显示暂停状态
+        }
     }
 
     //销毁我们当前自定义的videoView
@@ -321,6 +474,9 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
 
     //播放器的辅助方法--begin----------------------------
 
+    /**
+     * 创建MediaPlayer
+     */
     private synchronized void checkMediaPlayer() {
         if (mediaPlayer == null) {
             mediaPlayer = createMediaPlayer(); //每次都重新创建一个新的播放器
@@ -361,7 +517,13 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
         }
     }
 
+    //决定是否可以播放
     private void decideCanPlay() {
+        if (Utils.getVisiblePercent(mParentContainer) > VideoConstant.VIDEO_SCREEN_PERCENT)
+            //来回切换页面时，只有 >50,且满足自动播放条件才自动播放
+            resume();
+        else
+            pause();
     }
 
     public void isShowFullBtn(boolean isShow) {
@@ -378,9 +540,48 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
     }
 
     private void showPauseView(boolean show) {
+        mFullBtn.setVisibility(show ? View.VISIBLE : View.GONE);
+        mMiniPlayBtn.setVisibility(show ? View.GONE : View.VISIBLE);
+        mLoadingBar.clearAnimation();
+        mLoadingBar.setVisibility(View.GONE);
+        if (!show) {
+            mFrameView.setVisibility(View.VISIBLE);
+            loadFrameImage();
+        } else {
+            mFrameView.setVisibility(View.GONE);
+        }
     }
 
     private void showLoadingView() {
+        mFullBtn.setVisibility(View.GONE);
+        mLoadingBar.setVisibility(View.VISIBLE);
+        AnimationDrawable anim = (AnimationDrawable) mLoadingBar.getBackground();
+        anim.start();
+        mMiniPlayBtn.setVisibility(View.GONE);
+        mFrameView.setVisibility(View.GONE);
+        loadFrameImage();
+    }
+
+    private ADFrameImageLoadListener mFrameLoadListener;
+
+    /**
+     * 异步加载定帧图
+     */
+    private void loadFrameImage() {
+        if (mFrameLoadListener != null) {
+            mFrameLoadListener.onStartFrameLoad(mFrameURI, new ImageLoaderListener() {
+                @Override
+                public void onLoadingComplete(Bitmap loadedImage) {
+                    if (loadedImage != null) {
+                        mFrameView.setScaleType(ImageView.ScaleType.FIT_XY);
+                        mFrameView.setImageBitmap(loadedImage);
+                    } else {
+                        mFrameView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                        mFrameView.setImageResource(R.mipmap.video_img_error);
+                    }
+                }
+            });
+        }
     }
 
     private void showPlayView() {
@@ -424,23 +625,37 @@ public class MTVView extends RelativeLayout implements View.OnClickListener,
         public void onReceive(Context context, Intent intent) {
             //主动锁屏时 pause, 主动解锁屏幕时，resume
             switch (intent.getAction()) {
-                case Intent.ACTION_USER_PRESENT:
+                case Intent.ACTION_USER_PRESENT: //解锁
                     if (playerState == STATE_PAUSING) {
                         if (mIsRealPause) {
                             //手动点的暂停，回来后还暂停
-//                            pause();
+                            pause();
                         } else {
-//                            decideCanPlay();
+                            decideCanPlay();
                         }
                     }
                     break;
-                case Intent.ACTION_SCREEN_OFF:
+                case Intent.ACTION_SCREEN_OFF: //锁屏
                     if (playerState == STATE_PLAYING) {
-//                        pause();
+                        pause();
                     }
                     break;
             }
         }
+    }
+
+    public interface ADFrameImageLoadListener {
+
+        void onStartFrameLoad(String url, ImageLoaderListener listener);
+    }
+
+    public interface ImageLoaderListener {
+        /**
+         * 如果图片下载不成功，传null
+         *
+         * @param loadedImage
+         */
+        void onLoadingComplete(Bitmap loadedImage);
     }
 
     /**
