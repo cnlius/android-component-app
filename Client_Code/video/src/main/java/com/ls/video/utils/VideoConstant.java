@@ -1,4 +1,4 @@
-package com.ls.video;
+package com.ls.video.utils;
 
 /**
  * @author: qndroid

@@ -1,4 +1,4 @@
-package com.ls.video;
+package com.ls.video.utils;
 
 import android.graphics.Rect;
 import android.util.DisplayMetrics;

@@ -1,4 +1,4 @@
-package com.ls.video;
+package com.ls.video.utils;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -23,6 +23,8 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.RelativeLayout;
+
+import com.ls.video.R;
 
 /**
  * MTVView(MediaPlayer TextureView Video View)
